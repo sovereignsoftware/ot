@@ -28,7 +28,7 @@ And then add the dependency:
 
     libraryDependencies ++= Seq(
       // ...your other dependencies...
-      "ws.kahn" %% ot % "1.0-SNAPSHOT"
+      "ws.kahn" %% "ot" % "1.0-SNAPSHOT"
     )
     
 Currently only the 1.0-SNAPSHOT release has been published, and it's compiled for both Scala 2.10 and 2.11. As this is a little personal experiment / work in progress, may not work as intended, or at all.
