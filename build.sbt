@@ -44,8 +44,6 @@ libraryDependencies ++= Seq(
 
 
 // -- SBT Publish settings --------
-// Please ensure that your public key is appended to /home/maven/.ssh/authorized_keys for the
-// maven user at maven.shiftfocus.ca. See the readme for more information.
 
 publishMavenStyle := true
 
