@@ -46,16 +46,6 @@ case class Operation(components: IndexedSeq[OperationComponent], baseLength: Int
      """.stripMargin
   }
 
-  implicit val reads: Reads[Operation] = (
-    (__ \ "components").read[IndexedSeq[OperationComponent]] and
-    (__ \ "baseLength").read[Int]
-  )(Operation.apply _)
-
-  implicit val writes: Writes[Operation] = (
-    (__ \ "components").write[IndexedSeq[OperationComponent]] and
-      (__ \ "baseLength").write[Int]
-  )(unlift(Operation.unapply))
-
   /**
    * Apply the operation to a document.
    *
@@ -415,6 +405,16 @@ case class Operation(components: IndexedSeq[OperationComponent], baseLength: Int
 }
 
 object Operation {
+
+  implicit val reads: Reads[Operation] = (
+    (__ \ "components").read[IndexedSeq[OperationComponent]] and
+      (__ \ "baseLength").read[Int]
+    )(Operation.apply _)
+
+  implicit val writes: Writes[Operation] = (
+    (__ \ "components").write[IndexedSeq[OperationComponent]] and
+      (__ \ "baseLength").write[Int]
+    )(unlift(Operation.unapply))
 
   /**
    * Transform two operations that should be applied "simultaneously" to the same document.
