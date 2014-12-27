@@ -1,6 +1,6 @@
 name := """ot"""
 
-version := "1.0-SNAPSHOT"
+version := "1.0.0"
 
 organization := "ws.kahn"
 
@@ -32,6 +32,7 @@ resolvers ++= Seq(
 
 // -- External dependencies --------
 libraryDependencies ++= Seq(
+  "com.typesafe.play" %% "play-json" % "2.3.6",
   "joda-time" % "joda-time" % "2.1",
   "org.scalatest" %% "scalatest" % "2.2.1" % "test",
   "org.scalamock" %% "scalamock-scalatest-support" % "3.2" % "test",

@@ -1,7 +1,8 @@
 package ws.kahn.ot
 
+import play.api.libs.json._
+import play.api.libs.functional.syntax._
 import ws.kahn.ot.exceptions.IncompatibleOperationsException
-
 import scala.annotation.tailrec
 
 /**
@@ -45,6 +46,16 @@ case class Operation(components: IndexedSeq[OperationComponent], baseLength: Int
      """.stripMargin
   }
 
+  implicit val reads: Reads[Operation] = (
+    (__ \ "components").read[IndexedSeq[OperationComponent]] and
+    (__ \ "baseLength").read[Int]
+  )(Operation.apply _)
+
+  implicit val writes: Writes[Operation] = (
+    (__ \ "components").write[IndexedSeq[OperationComponent]] and
+      (__ \ "baseLength").write[Int]
+  )(unlift(Operation.unapply))
+
   /**
    * Apply the operation to a document.
    *
@@ -87,7 +98,15 @@ case class Operation(components: IndexedSeq[OperationComponent], baseLength: Int
    * @param that
    * @return
    */
-  def ++(that: Operation): Operation = {
+  def o(that: Operation): Operation = this.composeWith(that)
+
+  /**
+   * Composes two operations together into one single operation.
+   *
+   * @param that
+   * @return
+   */
+  def composeWith(that: Operation): Operation = {
     if (this.targetLength != that.baseLength) {
       throw IncompatibleOperationsException(s"The target length of the left operation (${this.targetLength}) must be equal to the base length of the right operation (${that.baseLength}). These operations cannot be composed.")
     }
@@ -385,6 +404,14 @@ case class Operation(components: IndexedSeq[OperationComponent], baseLength: Int
       operation
     }
   }
+
+  /**
+   * An alias for the transform method.
+   *
+   * @param that
+   * @return
+   */
+  def x(that: Operation): (Operation, Operation) = Operation.transform(this, that)
 }
 
 object Operation {
@@ -394,52 +421,52 @@ object Operation {
    *
    * In times of conflict, the Alpha operation always takes precedence over the Beta operation.
    *
-   * @param alphaOp
-   * @param betaOp
+   * @param leftOp
+   * @param rightOp
    * @return
    */
-  def transform(alphaOp: Operation, betaOp: Operation): (Operation, Operation) = {
+  def transform(leftOp: Operation, rightOp: Operation): (Operation, Operation) = {
     var aIdx = 0
     var bIdx = 0
-    var alphaOps = alphaOp.components
-    var betaOps = betaOp.components
+    var leftOps = leftOp.components
+    var rightOps = rightOp.components
 
     var shouldContinue = true
 
-    var alpha = alphaOps(aIdx)
-    var beta = betaOps(bIdx)
+    var leftComp = leftOps(aIdx)
+    var rightComp = rightOps(bIdx)
 
     var transformedA = IndexedSeq.empty[OperationComponent]
     var transformedB = IndexedSeq.empty[OperationComponent]
 
     while (shouldContinue) {
-      (alpha, beta) match {
-        // If alpha contains an Insert, insert it, retain its characters in the other
-        // operation, and advance the alpha pointer.
+      (leftComp, rightComp) match {
+        // If leftComp contains an Insert, insert it, retain its characters in the other
+        // operation, and advance the leftComp pointer.
         case (insertA: Insert, _) => {
           transformedA = transformedA :+ insertA
           transformedB = transformedB :+ Retain(insertA.chars.length)
 
           aIdx += 1
-          if (aIdx == alphaOps.length) {
-            alpha = Retain(0)
+          if (aIdx == leftOps.length) {
+            leftComp = Retain(0)
           }
           else {
-            alpha = alphaOps(aIdx)
+            leftComp = leftOps(aIdx)
           }
         }
 
-        // Same thing for beta containing an insert, except Alpha's inserts happen first.
+        // Same thing for rightComp containing an insert, except Alpha's inserts happen first.
         case (_, insertB: Insert) => {
           transformedA = transformedA :+ Retain(insertB.chars.length)
           transformedB = transformedB :+ insertB
 
           bIdx += 1
-          if (bIdx == betaOps.length) {
-            beta = Retain(0)
+          if (bIdx == rightOps.length) {
+            rightComp = Retain(0)
           }
           else {
-            beta = betaOps(bIdx)
+            rightComp = rightOps(bIdx)
           }
         }
 
@@ -451,10 +478,10 @@ object Operation {
             transformedA = transformedA :+ retainB
             transformedB = transformedB :+ retainB
 
-            alpha = Retain(retainA.num - retainB.num)
+            leftComp = Retain(retainA.num - retainB.num)
 
             bIdx += 1
-            beta = betaOps(bIdx)
+            rightComp = rightOps(bIdx)
           }
           // A == B
           else if (retainA.num == retainB.num) {
@@ -464,14 +491,14 @@ object Operation {
             aIdx += 1
             bIdx += 1
 
-            if (aIdx >= alphaOp.components.length &&
-                bIdx >= betaOp.components.length
+            if (aIdx >= leftOp.components.length &&
+                bIdx >= rightOp.components.length
             ) {
               shouldContinue = false
             }
             else {
-              alpha = alphaOps(aIdx)
-              beta = betaOps(bIdx)
+              leftComp = leftOps(aIdx)
+              rightComp = rightOps(bIdx)
             }
           }
           // A < B
@@ -479,10 +506,10 @@ object Operation {
             transformedA = transformedA :+ retainA
             transformedB = transformedB :+ retainA
 
-            beta = Retain(retainB.num - retainA.num)
+            rightComp = Retain(retainB.num - retainA.num)
 
             aIdx += 1
-            alpha = alphaOps(aIdx)
+            leftComp = leftOps(aIdx)
           }
         }
 
@@ -490,10 +517,10 @@ object Operation {
           // A > B
           if (deleteA.num > retainB.num) {
             transformedA = transformedA :+ Delete(retainB.num)
-            alpha = Delete(deleteA.num - retainB.num)
+            leftComp = Delete(deleteA.num - retainB.num)
 
             bIdx += 1
-            beta = betaOps(bIdx)
+            rightComp = rightOps(bIdx)
           }
           // A == B
           else if (deleteA.num == retainB.num) {
@@ -502,23 +529,23 @@ object Operation {
             aIdx += 1
             bIdx += 1
 
-            if (aIdx >= alphaOp.components.length &&
-              bIdx >= betaOp.components.length
+            if (aIdx >= leftOp.components.length &&
+              bIdx >= rightOp.components.length
             ) {
               shouldContinue = false
             }
             else {
-              alpha = alphaOps(aIdx)
-              beta = betaOps(bIdx)
+              leftComp = leftOps(aIdx)
+              rightComp = rightOps(bIdx)
             }
           }
           // A < B
           else {
             transformedA = transformedA :+ deleteA
-            beta = Retain(retainB.num - deleteA.num)
+            rightComp = Retain(retainB.num - deleteA.num)
 
             aIdx += 1
-            alpha = alphaOps(aIdx)
+            leftComp = leftOps(aIdx)
           }
         }
 
@@ -526,9 +553,9 @@ object Operation {
           // A > B
           if (retainA.num > deleteB.num) {
             transformedB = transformedB :+ deleteB
-            alpha = Retain(retainA.num - deleteB.num)
+            leftComp = Retain(retainA.num - deleteB.num)
             bIdx += 1
-            beta = betaOps(bIdx)
+            rightComp = rightOps(bIdx)
           }
           // A == B
           else if (retainA.num == deleteB.num) {
@@ -537,60 +564,60 @@ object Operation {
             aIdx += 1
             bIdx += 1
 
-            if (aIdx >= alphaOp.components.length &&
-              bIdx >= betaOp.components.length
+            if (aIdx >= leftOp.components.length &&
+              bIdx >= rightOp.components.length
             ) {
               shouldContinue = false
             }
             else {
-              alpha = alphaOps(aIdx)
-              beta = betaOps(bIdx)
+              leftComp = leftOps(aIdx)
+              rightComp = rightOps(bIdx)
             }
           }
           // A < B
           else {
             transformedB = transformedB :+ Delete(retainA.num)
-            beta = Delete(deleteB.num - retainA.num)
+            rightComp = Delete(deleteB.num - retainA.num)
             aIdx += 1
-            alpha = alphaOps(aIdx)
+            leftComp = leftOps(aIdx)
           }
         }
 
         case (deleteA: Delete, deleteB: Delete) => {
           // A > B
           if (deleteA.num > deleteB.num) {
-            alpha = Delete(deleteA.num - deleteB.num)
+            leftComp = Delete(deleteA.num - deleteB.num)
 
             bIdx += 1
-            beta = betaOps(bIdx)
+            rightComp = rightOps(bIdx)
           }
           // A == B
           else if (deleteA.num == deleteB.num) {
             aIdx += 1
             bIdx += 1
 
-            if (aIdx >= alphaOp.components.length &&
-              bIdx >= betaOp.components.length
+            if (aIdx >= leftOp.components.length &&
+              bIdx >= rightOp.components.length
             ) {
               shouldContinue = false
             }
             else {
-              alpha = alphaOps(aIdx)
-              beta = betaOps(bIdx)
+              leftComp = leftOps(aIdx)
+              rightComp = rightOps(bIdx)
             }
           }
           // A < B
           else {
-            beta = Delete(deleteB.num - deleteA.num)
+            rightComp = Delete(deleteB.num - deleteA.num)
 
             aIdx += 1
-            alpha = alphaOps(aIdx)
+            leftComp = leftOps(aIdx)
           }
         }
       }
     }
 
-    (Operation(transformedA, betaOp.targetLength), Operation(transformedB, alphaOp.targetLength))
+    (Operation(transformedA, rightOp.targetLength), Operation(transformedB, leftOp.targetLength))
   }
 
 
