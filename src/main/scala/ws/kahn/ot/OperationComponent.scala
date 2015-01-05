@@ -10,26 +10,18 @@ sealed trait OperationComponent {
 object OperationComponent {
   implicit val opReads = new Reads[OperationComponent] {
     def reads(json: JsValue) = {
-      (json \ "type").asOpt[String] match {
-        case Some(opType) if opType == "retain" => {
-          (json \ "n").asOpt[Int] match {
-            case Some(num) => JsSuccess(Retain(num))
-            case _ => JsError("Retain operation requires 'n' field with an integer value.")
+      json match {
+        case number: JsNumber => {
+          val num: Int = number.as[Int]
+          if (num >= 0) {
+            JsSuccess(Retain(num))
+          }
+          else {
+            JsSuccess(Delete(num * -1))
           }
         }
-        case Some(opType) if opType == "insert" => {
-          (json \ "chars").asOpt[String] match {
-            case Some(chars) => JsSuccess(Insert(chars))
-            case _ => JsError("Insert operation requires 'chars' field with a string value.")
-          }
-        }
-        case Some(opType) if opType == "delete" => {
-          (json \ "n").asOpt[Int] match {
-            case Some(num) => JsSuccess(Delete(num))
-            case _ => JsError("Delete operation requires 'n' field with an integer value.")
-          }
-        }
-        case None => JsError("Operation component field 'type' must be provided and equal to retain, insert, or delete.")
+        case string: JsString => JsSuccess(Insert(string.as[String]))
+        case _ => JsError("Not a valid operation. It must either be a string or a number.")
       }
     }
   }
@@ -37,18 +29,9 @@ object OperationComponent {
   implicit val opWrites = new Writes[OperationComponent] {
     def writes(opc: OperationComponent): JsValue = {
       opc match {
-        case retain: Retain => Json.obj(
-          "type" -> "retain",
-          "n" -> retain.num
-        )
-        case insert: Insert => Json.obj(
-          "type" -> "insert",
-          "chars" -> insert.chars
-        )
-        case delete: Delete => Json.obj(
-          "type" -> "delete",
-          "n" -> delete.num
-        )
+        case retain: Retain => JsNumber(retain.num)
+        case insert: Insert => JsString(insert.chars)
+        case delete: Delete => JsNumber(delete.num * -1)
       }
     }
   }

@@ -159,13 +159,19 @@ class OtSpec extends WordSpec with MockFactory {
         serverEdits(1).applyTo(serverDocInter1) should be(serverDocInter2)
         serverEdits(2).applyTo(serverDocInter2) should be(finalServerDocument)
 
+        val timeA = System.nanoTime / 1000
+
         // So we'll need to compose the recent server edits into one operation
         val composedServerEdit = serverEdits.tail.foldLeft(serverEdits.head) {
           (left: Operation, right: Operation) => left composeWith right
         }
 
+        val timeAfterCompose = System.nanoTime / 1000
+
         // And transform the client edit against this operation
         val (xfServerOp, xfClientOp) = Operation.transform(composedServerEdit, clientEdit)
+
+        val timeAfterTransform = System.nanoTime / 1000
 
         // And then apply the transformed client edit against the final server text
         val afterServerEdits = composedServerEdit.applyTo(startingDocument)
@@ -175,12 +181,84 @@ class OtSpec extends WordSpec with MockFactory {
         // And we should also be able to apply the transformed server edits against the client's final text
         val afterBothEditsServer = xfServerOp.applyTo(afterClientEdit)
 
+        val timeAfterApplications = System.nanoTime / 1000
+
+        println(s"Time spent...")
+        println(s"\tComposing: ${(timeAfterCompose-timeA)}")
+        println(s"\tTransforming: ${timeAfterTransform-timeAfterCompose}")
+        println(s"\tApplying: ${timeAfterApplications-timeAfterTransform}")
+        println(s"\tTotal: ${timeAfterApplications-timeA}")
+
         // Assertions
         afterServerEdits should be(finalServerDocument)
         afterClientEdit should be(finalClientDocument)
         afterBothEditsClient should be(finalMergedDocument)
         afterBothEditsServer should be(finalMergedDocument)
       }
+
+//      "transform against several server edits without composing" in {
+//        val startingDocument = "There is a cute little bunny. He runs very fast."
+//
+//        val serverDocInter1 = "There is a very cute little bunny. He runs very fast."
+//        val serverDocInter2 = "There is a very cute little rabbit. He runs very fast."
+//
+//        val finalServerDocument = "There is a very cute little rabbit. He runs quickly."
+//
+//        val finalClientDocument = "There is a cute little bunny. He hops very fast."
+//        val finalMergedDocument = "There is a very cute little rabbit. He hops quickly."
+//
+//        // Server has 3 more recent edits since the starting document
+//        val serverEdits = IndexedSeq(
+//          Operation(IndexedSeq(Retain(11), Insert("very "), Retain(37)), 48),
+//          Operation(IndexedSeq(Retain(28), Delete(5), Insert("rabbit"), Retain(20)), 53),
+//          Operation(IndexedSeq(Retain(44), Delete(9), Insert("quickly"), Retain(1)), 54)
+//        )
+//
+//        // But the client made their edit against the starting document
+//        val clientEdit = Operation(IndexedSeq(Retain(33), Delete(4), Insert("hops"), Retain(11)), 48)
+//
+//        // First test the edits to ensure they work...
+//        serverEdits(0).applyTo(startingDocument) should be(serverDocInter1)
+//        serverEdits(1).applyTo(serverDocInter1) should be(serverDocInter2)
+//        serverEdits(2).applyTo(serverDocInter2) should be(finalServerDocument)
+//        clientEdit.applyTo(startingDocument) should be(finalClientDocument)
+//
+//        val timeA = System.nanoTime / 1000
+//
+//        // So we'll need to compose the recent server edits into one operation
+//        val composedServerEdit = serverEdits.tail.foldLeft(serverEdits.head) {
+//          (left: Operation, right: Operation) => left composeWith right
+//        }
+//
+//        val timeAfterCompose = System.nanoTime / 1000
+//
+//        // And transform the client edit against this operation
+//        val (xfServerOp, xfClientOp) = Operation.transform(composedServerEdit, clientEdit)
+//
+//        val timeAfterTransform = System.nanoTime / 1000
+//
+//        // And then apply the transformed client edit against the final server text
+//        val afterServerEdits = composedServerEdit.applyTo(startingDocument)
+//        val afterClientEdit = clientEdit.applyTo(startingDocument)
+//        val afterBothEditsClient = xfClientOp.applyTo(afterServerEdits)
+//
+//        // And we should also be able to apply the transformed server edits against the client's final text
+//        val afterBothEditsServer = xfServerOp.applyTo(afterClientEdit)
+//
+//        val timeAfterApplications = System.nanoTime / 1000
+//
+//        println(s"Time spent...")
+//        println(s"\tComposing: ${(timeAfterCompose-timeA)}")
+//        println(s"\tTransforming: ${timeAfterTransform-timeAfterCompose}")
+//        println(s"\tApplying: ${timeAfterApplications-timeAfterTransform}")
+//        println(s"\tTotal: ${timeAfterApplications-timeA}")
+//
+//        // Assertions
+//        afterServerEdits should be(finalServerDocument)
+//        afterClientEdit should be(finalClientDocument)
+//        afterBothEditsClient should be(finalMergedDocument)
+//        afterBothEditsServer should be(finalMergedDocument)
+//      }
     }
   }
 }
