@@ -9,6 +9,10 @@ sealed trait Operation {
   def length: Int
 }
 
+sealed trait AttributedOperation extends Operation {
+  val attributes: Option[JsObject]
+}
+
 object Operation {
 
   object Types {
@@ -63,9 +67,9 @@ object Operation {
  *
  * @param num the number of characters to skip or retain.
  */
-case class Retain(num: Int, attributes: Option[JsObject] = None) extends Operation {
+case class Retain(num: Int, attributes: Option[JsObject] = None) extends AttributedOperation {
   override val opType: Char = 'r'
-  override def toString: String = s"Retain($num)"
+  override def toString: String = s"Retain($num, ${attributes.toString()})"
   override def length: Int = num
 }
 
@@ -75,9 +79,9 @@ case class Retain(num: Int, attributes: Option[JsObject] = None) extends Operati
  *
  * @param chars the string to insert
  */
-case class Insert(chars: String, attributes: Option[JsObject] = None) extends Operation {
+case class Insert(chars: String, attributes: Option[JsObject] = None) extends AttributedOperation {
   override val opType: Char = 'i'
-  override def toString: String = s"""Insert(\"${chars}\")"""
+  override def toString: String = s"""Insert(\"${chars}\", ${attributes.toString()})"""
   override def length: Int = chars.length
 }
 

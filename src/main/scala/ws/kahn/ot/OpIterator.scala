@@ -27,17 +27,22 @@ case class OpIterator(ops: IndexedSeq[Operation]) {
    * Reveals the type of the next available object
    */
   def peekType: Int = {
-    ops(idx) match {
-      case op: Retain => Operation.Types.Retain
-      case op: Insert => Operation.Types.Insert
-      case op: Delete => Operation.Types.Delete
+    if (idx >= ops.length) {
+      Operation.Types.Retain
+    }
+    else {
+      ops(idx) match {
+        case op: Retain => Operation.Types.Retain
+        case op: Insert => Operation.Types.Insert
+        case op: Delete => Operation.Types.Delete
+      }
     }
   }
 
   /**
    * Returns whether there is another operation available to be taken.
    */
-  def hasNext(length: Int): Boolean = idx < ops.length && peekLength > 0
+  def hasNext: Boolean = idx < ops.length && peekLength > 0
 
   /**
    * If a length isn't given, take the whole available operation.
@@ -69,7 +74,7 @@ case class OpIterator(ops: IndexedSeq[Operation]) {
     val nextOp = ops(idx) match {
       case op: Retain => Retain(lengthToTake, op.attributes)
       case op: Insert => Insert(op.chars.slice(offset, offset + length), op.attributes)
-      case op: Delete => Retain(lengthToTake, op.attributes)
+      case op: Delete => Delete(lengthToTake)
     }
 
     // Update offset and index as required

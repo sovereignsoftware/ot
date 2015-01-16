@@ -110,29 +110,32 @@ case class Delta(operations: IndexedSeq[Operation], baseLength: Int) {
     }
     else {
       // Get an ops iterator for each delta's operations
-      thisItr = OpIterator(this.operations)
-      thatItr = OpIterator(that.operations)
+      val thisItr = OpIterator(this.operations)
+      val thatItr = OpIterator(that.operations)
 
       // Start a buffer for the newly created operations
       var operations = IndexedSeq[Operation]()
 
-      while (thisItr.hasNext() && thatItr.hasNext()) {
-        if (thatItr.peekType() == Operations.Types.Insert) {
-          operations = operations :+ thatItr.next()
+      while (thisItr.hasNext && thatItr.hasNext) {
+        if (thatItr.peekType == Operation.Types.Insert) {
+          operations = operations :+ thatItr.next
         }
-        else if (thisItr.peekType() == Operations.Types.Delete) {
-          operations = operations :+ thisItr.next()
+        else if (thisItr.peekType == Operation.Types.Delete) {
+          operations = operations :+ thisItr.next
         }
         else {
-          val length = math.min(thisItr.peekLength(), thatItr.peekLength())
+          val length = math.min(thisItr.peekLength, thatItr.peekLength)
           val thisOp = thisItr.next(length)
           val thatOp = thatItr.next(length)
+          val emptyObj = JsObject(Seq())
 
           (thisOp, thatOp) match {
-            case (retainL: Retain, retainR: Retain) => operations = operations :+ Retain(length, retainL.attributes.deepMerge(retainR.attributes)) // need to compose attributes here
-            case (retainL: Retain, deleteR: Delete) => operations = operations :+ Delete(length, retainL.attributes.deepMerge(deleteR.attributes))
-            case (insertL: Insert, retainR: Retain) => operations = operations :+ Insert(insertL.chars, insertL.attributes.deepMerge(retainR.attributes)) // compose attributes
+            case (retainL: Retain, retainR: Retain) => operations = operations :+ Retain(length, mergeAttributes(retainL.attributes, retainR.attributes)) // need to compose attributes here
+            case (retainL: Retain, deleteR: Delete) => operations = operations :+ Delete(length)
+            case (insertL: Insert, retainR: Retain) => operations = operations :+ Insert(insertL.chars, mergeAttributes(insertL.attributes, retainR.attributes, true)) // compose attributes
             case (insertL: Insert, deleteR: Delete) => // Do nothing, they cancel each other out.
+            case (_, insertR: Insert) => throw new Exception("Something went horribly wrong. Inserts on the right side should already be taken care of.")
+            case (deleteL: Delete, _) => throw new Exception("Something went horribly wrong. Deletes on the left side should already be taken care of.")
           }
         }
       }
@@ -166,24 +169,27 @@ case class Delta(operations: IndexedSeq[Operation], baseLength: Int) {
 
     var xfOps = IndexedSeq.empty[Operation]
 
-    while (leftItr.hasNext() || rightItr.hasNext()) {
-      if (thisItr.peekType() == Operation.Types.Insert &&
-          (priority || thatItr.peekType() != Operation.Types.Insert)
+    while (thisItr.hasNext || thatItr.hasNext) {
+      if (thisItr.peekType == Operation.Types.Insert &&
+          (priority || thatItr.peekType != Operation.Types.Insert)
       ) {
-        xfOps = xfOps :+ Retain(thisItr.next().length)
+        xfOps = xfOps :+ Retain(thisItr.next.length)
       }
-      else if (thatItr.peekType() == Operation.Types.Insert) {
-        xfOps = xfOps :+ thatItr.next()
+      else if (thatItr.peekType == Operation.Types.Insert) {
+        xfOps = xfOps :+ thatItr.next
       }
       else {
-        val length = math.min(thisItr.peekLength(), thatItr.peekLength())
+        val length = math.min(thisItr.peekLength, thatItr.peekLength)
         val thisOp = thisItr.next(length)
         val thatOp = thatItr.next(length)
 
         (thisOp, thatOp) match {
           case (delete: Delete, _) => // do nothing
+
           case (_, delete: Delete) => xfOps = xfOps :+ delete
-          case _ => xfOps = xfOps :+ Retain(length, thisOp.attributes.deepMerge(rightOp.attributes))
+
+          case (thisAOp: AttributedOperation, thatAOp: AttributedOperation) =>
+            xfOps = xfOps :+ Retain(length, mergeAttributes(thisAOp.attributes, thatAOp.attributes))
         }
       }
     }
@@ -201,16 +207,16 @@ case class Delta(operations: IndexedSeq[Operation], baseLength: Int) {
     var index = position
     var offset = 0
 
-    while (thisItr.hasNext() && offset <= position) {
-      val length = thisItr.peekLength()
-      val nextType = thisItr.peekType()
+    while (thisItr.hasNext && offset <= position) {
+      val length = thisItr.peekLength
+      val nextType = thisItr.peekType
 
-      thisItr.next()
+      thisItr.next
 
-      if (nextType == Operations.Types.Delete) {
+      if (nextType == Operation.Types.Delete) {
         index -= math.min(length, index - offset)
       }
-      else if (nextType == Operations.Types.Insert && (offset < index || !priority)) {
+      else if (nextType == Operation.Types.Insert && (offset < index || !priority)) {
         index += length
         offset += length
       }
@@ -228,6 +234,38 @@ case class Delta(operations: IndexedSeq[Operation], baseLength: Int) {
    * @return
    */
   def x(that: Delta): Delta = this.transform(that)
+
+  /**
+   * Merge two json objects with the option to strip top-level nulls. Generally, because "insert" operations
+   * insert new characters into the text, null attributes have no effect and can be discarded... they are only useful
+   * on "retain" operations when we want to remove an attribute.
+   *
+   * @param left
+   * @param right
+   * @param discardNulls
+   * @return
+   */
+  private def mergeAttributes(left: Option[JsObject], right: Option[JsObject], discardNulls: Boolean = false): Option[JsObject] = {
+    val merged = (left, right) match {
+      case (Some(lAttrs), Some(rAttrs)) => Some(lAttrs.deepMerge(rAttrs))
+      case (Some(lAttrs), None) => Some(lAttrs)
+      case (None, Some(rAttrs)) => Some(rAttrs)
+      case (None, None) => None
+    }
+
+    val filtered = if (!discardNulls) { merged } else {
+      merged match {
+        case Some(jsobj) =>
+          Some(JsObject(jsobj.fields.filterNot({ field => field._2 match {
+            case JsNull => true
+            case _ => false
+          }})))
+        case None => None
+      }
+    }
+
+    filtered
+  }
 }
 
 object Delta {
