@@ -202,7 +202,7 @@ case class Delta(operations: IndexedSeq[Operation], baseLength: Int) {
    * delta. For example, if a user submits their current cursor position, and other
    * deltas have been applied more recently, their cursor position can be transformed.
    */
-  def transformPosition(position: Int, priority: Boolean = false) = {
+  def transformPosition(position: Int, priority: Boolean = false): Int = {
     val thisItr = OpIterator(this.operations)
     var index = position
     var offset = 0
@@ -280,4 +280,7 @@ object Delta {
       (__ \ "baseLength").write[Int]
     )(unlift(Delta.unapply))
 
+  def compose(first: Delta, second: Delta): Delta = first o second
+  def transform(left: Delta, right: Delta): Delta = left x right
+  def transform(left: Delta, right: Delta, priority: Boolean) = left.transform(right, priority)
 }
