@@ -1,13 +1,12 @@
 # Operational Transformation
 
-This is my implementation of Operational Transformation in Scala.
+This is my implementation of Operational Transformation in Scala. It is a rich-text algorithm that aims to be compatible with the rich-text OT type written in JavaScript here: https://github.com/ottypes/rich-text. Some of my code was adapted from this library.
 
-NB: This is a pretty naive implementation and much of it doesn't look like idiomatic Scala. My first goal is to understand the algorithms and get them working, and do optimization later.
+It operates on plain-text documents with added "attributes" to provide rich-text annotations. For now (please yell at me if this is wrong), I've left the attributes to be an optional JsObject attached to the operation.
+My reasoning is that, as I am aiming for compatibility with the JS library, there is no defined list of allowed attributes. It will depend on the client's implementation.
 
-It operates strictly on plaintext documents, and implements operations composed using the following basic components:
-
-* `Retain(n: Int)` - advance the cursor in the document, skipping over `n` characters
-* `Insert(chars: String)` - insert `chars` at the current position of the cursor
+* `Retain(n: Int, attributes: Option[JsObject])` - advance the cursor in the document, skipping over `n` characters
+* `Insert(chars: String, attributes: Option[JsObject])` - insert `chars` at the current position of the cursor
 * `Delete(n: Int)` - delete `n` characters from the cursor's current position
 
 I have implemented the two crucial functions on operations: compose, and transform.
