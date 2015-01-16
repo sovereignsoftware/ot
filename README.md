@@ -11,8 +11,8 @@ My reasoning is that, as I am aiming for compatibility with the JS library, ther
 
 I have implemented the two crucial functions on operations: compose, and transform.
 
-* `val composedOp: Operation = (op1 ++ op2)` - used between two operations that should be applied in sequence from the same starting document, this method composes them together into a single operation. This is useful for simplifying operations before they are to be transformed... rather than transforming 5 x 5 operations you can compose each side and transform 1 x 1 operation.
-* `val (xfServerOp, xfClientOp) = transform(serverOp, clientOp)` - given two operations that should be applied in parallel on the same starting document, this will transform both operations returning them in a tuple: the server's operation will be transformed to be applied to the client's document, and the client's operation will be transformed to be applied on the server. Since all operations must still be ordered, we assume that the server's changes are applied "first" and in any conflict the server "wins".
+* `val composedDelta: Operation = delta1.compose(delta2)` - used between two operations that should be applied in sequence from the same starting document, this method composes them together into a single operation. This is useful for simplifying operations before they are to be transformed... rather than transforming 5 x 5 operations you can compose each side and transform 1 x 1 operation.
+* `val xfDelta2 = delta1.transform(delta2)` - given two operations that should be applied in parallel on the same starting document, this will transform both operations returning them in a tuple: the server's operation will be transformed to be applied to the client's document, and the client's operation will be transformed to be applied on the server. Since all operations must still be ordered, we assume that the server's changes are applied "first" and in any conflict the server "wins".
 
 ## Usage
 
