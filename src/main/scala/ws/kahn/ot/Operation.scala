@@ -23,28 +23,19 @@ object Operation {
 
   implicit val opReads = new Reads[Operation] {
     def reads(json: JsValue) = {
-      json match {
-        case number: JsNumber => {
-          val num: Int = number.as[Int]
-          if (num >= 0) {
-            JsSuccess(Retain(num))
-          }
-          else {
-            JsSuccess(Delete(num * -1))
-          }
-        }
-        case string: JsString => JsSuccess(Insert(string.as[String]))
-        case _ => JsError("Not a valid operation. It must either be a string or a number.")
-      }
+      {(json \ "retain").asOpt[Int].map { num => Retain.retainReads.reads(json) } orElse
+        (json \ "insert").asOpt[Int].map { num => Insert.insertReads.reads(json) } orElse
+          (json \ "retain").asOpt[Int].map { num => Delete.deleteReads.reads(json) }} getOrElse
+            JsError("Error reading operation")
     }
   }
 
   implicit val opWrites = new Writes[Operation] {
     def writes(opc: Operation): JsValue = {
       opc match {
-        case retain: Retain => JsNumber(retain.num)
-        case insert: Insert => JsString(insert.chars)
-        case delete: Delete => JsNumber(delete.num * -1)
+        case retain: Retain => Retain.retainWrites.writes(retain)
+        case insert: Insert => Insert.insertWrites.writes(insert)
+        case delete: Delete => Delete.deleteWrites.writes(delete)
       }
     }
   }
@@ -69,8 +60,21 @@ object Operation {
  */
 case class Retain(num: Int, attributes: Option[JsObject] = None) extends AttributedOperation {
   override val opType: Char = 'r'
+
   override def toString: String = s"Retain($num, ${attributes.toString()})"
+
   override def length: Int = num
+}
+object Retain {
+  implicit val retainReads = (
+    (__ \ "retain").read[Int] and
+      (__ \ "attributes").readNullable[JsObject]
+    )(Retain.apply _)
+
+  implicit val retainWrites = (
+      (__ \ "retain").write[Int] and
+        (__ \ "attributes").writeNullable[JsObject]
+    )(unlift(Retain.unapply))
 }
 
 /**
@@ -81,8 +85,22 @@ case class Retain(num: Int, attributes: Option[JsObject] = None) extends Attribu
  */
 case class Insert(chars: String, attributes: Option[JsObject] = None) extends AttributedOperation {
   override val opType: Char = 'i'
+
   override def toString: String = s"""Insert(\"${chars}\", ${attributes.toString()})"""
+
   override def length: Int = chars.length
+}
+
+object Insert {
+  implicit val insertReads = (
+    (__ \ "insert").read[String] and
+      (__ \ "attributes").readNullable[JsObject]
+    )(Insert.apply _)
+
+  implicit val insertWrites = (
+    (__ \ "insert").write[String] and
+      (__ \ "attributes").writeNullable[JsObject]
+    )(unlift(Insert.unapply))
 }
 
 /**
@@ -93,6 +111,25 @@ case class Insert(chars: String, attributes: Option[JsObject] = None) extends At
  */
 case class Delete(num: Int) extends Operation {
   override val opType: Char = 'd'
+
   override def toString: String = s"Delete($num)"
+
   override def length: Int = num
+}
+
+object Delete {
+  implicit val deleteReads = new Reads[Delete] {
+    def reads(json: JsValue) = {
+      (json \ "delete").asOpt[Int] match {
+        case Some(delete) => JsSuccess(Delete(delete))
+        case _ => JsError("Invalid delete operation.")
+      }
+    }
+  }
+
+  implicit val deleteWrites = new Writes[Delete] {
+    def writes(opc: Delete): JsValue = {
+      Json.obj("delete" -> JsNumber(opc.num))
+    }
+  }
 }

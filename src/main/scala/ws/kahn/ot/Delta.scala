@@ -47,6 +47,22 @@ case class Delta(operations: IndexedSeq[Operation], baseLength: Int) {
   }
 
   /**
+   * Composes two deltas together into one single delta.
+   *
+   * @param that
+   * @return
+   */
+  def o(that: Delta): Delta = this.compose(that)
+
+  /**
+   * An alias for the transform method.
+   *
+   * @param that
+   * @return
+   */
+  def x(that: Delta): Delta = this.transform(that)
+
+  /**
    * Apply the delta to a document.
    *
    * @param document
@@ -81,14 +97,6 @@ case class Delta(operations: IndexedSeq[Operation], baseLength: Int) {
 
     newDocument
   }
-
-  /**
-   * Composes two deltas together into one single delta.
-   *
-   * @param that
-   * @return
-   */
-  def o(that: Delta): Delta = this.compose(that)
 
   /**
    * Composes two deltas together into one single delta.
@@ -226,14 +234,6 @@ case class Delta(operations: IndexedSeq[Operation], baseLength: Int) {
     }
     index
   }
-
-  /**
-   * An alias for the transform method.
-   *
-   * @param that
-   * @return
-   */
-  def x(that: Delta): Delta = this.transform(that)
 
   /**
    * Merge two json objects with the option to strip top-level nulls. Generally, because "insert" operations
