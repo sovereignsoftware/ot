@@ -209,13 +209,9 @@ class OtSpec extends WordSpec with MockFactory {
 
         val testOpsA = IndexedSeq[Operation](
           Retain(5),
-          Insert("aticious", Some(Json.obj(
-            "bold" -> true
-          ))),
+          Insert("aticious", Some(Map("bold" -> BooleanAttribute(true)))),
           Delete(3),
-          Retain(8, Some(Json.obj(
-            "color" -> "#123"
-          ))),
+          Retain(8, Some(Map("color" -> StringAttribute("#123")))),
           Insert("cat"),
           Delete(5),
           Retain(1)
@@ -225,9 +221,7 @@ class OtSpec extends WordSpec with MockFactory {
           Retain(4),
           Delete(6),
           Insert("preci"),
-          Retain(4, Some(Json.obj(
-            "bold" -> true
-          ))),
+          Retain(4, Some(Map("bold" -> BooleanAttribute(true)))),
           Insert("giant "),
           Retain(10),
           Insert("-like stuff"),
@@ -238,11 +232,11 @@ class OtSpec extends WordSpec with MockFactory {
           Retain(4),
           Delete(1),
           Insert("preci"),
-          Insert("ous", Some(Json.obj("bold" -> true))),
+          Insert("ous", Some(Map("bold" -> BooleanAttribute(true)))),
           Delete(3),
-          Retain(1, Some(Json.obj("bold" -> true, "color" -> "#123"))),
+          Retain(1, Some(Map("bold" -> BooleanAttribute(true), "color" -> StringAttribute("#123")))),
           Insert("giant "),
-          Retain(7, Some(Json.obj("color" -> "#123"))),
+          Retain(7, Some(Map("color" -> StringAttribute("#123")))),
           Insert("cat"),
           Insert("-like stuff"),
           Delete(5),

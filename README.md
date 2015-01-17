@@ -2,12 +2,20 @@
 
 This is my implementation of Operational Transformation in Scala. It is a rich-text algorithm that aims to be compatible with the rich-text OT type written in JavaScript here: https://github.com/ottypes/rich-text. Some of my code was adapted from this library.
 
-It operates on plain-text documents with added "attributes" to provide rich-text annotations. For now (please yell at me if this is wrong), I've left the attributes to be an optional JsObject attached to the operation.
-My reasoning is that, as I am aiming for compatibility with the JS library, there is no defined list of allowed attributes. It will depend on the client's implementation.
+It operates on plain-text documents with added "attributes" to provide rich-text annotations.
 
-* `Retain(n: Int, attributes: Option[JsObject])` - advance the cursor in the document, skipping over `n` characters
-* `Insert(chars: String, attributes: Option[JsObject])` - insert `chars` at the current position of the cursor
+* `Retain(n: Int, attributes: Option[Map[String, Attribute]])` - advance the cursor in the document, skipping over `n` characters
+* `Insert(chars: String, attributes: Option[Map[String, Attribute]])` - insert `chars` at the current position of the cursor
 * `Delete(n: Int)` - delete `n` characters from the cursor's current position
+
+The attribute list is an optional mapping from string keys to `Attribute` values. An `Attribute` can
+be any one of:
+
+* `StringAttribute(value: String)` -- corresponds to javascript strings and the Play JSON "JsString" object
+* `NumberAttribute(value: Double)` -- corresponds to javascript numbers and the Play JSON "JsNumber" object
+* `BooleanAttribute(value: Boolean)` -- corresponds to javascript booleans and the Play JSON "JsBoolean" object
+* `NullAttribute()` -- this is the special one. I want to treat "Null" as an actual value, since this is a special case for Retain ops that will remove an attribute key. This
+corresponds to javascript's "null" and the Play JSON "JsNull" object
 
 I have implemented the two crucial functions on operations: compose, and transform.
 

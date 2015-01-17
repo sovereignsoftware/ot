@@ -138,9 +138,9 @@ case class Delta(operations: IndexedSeq[Operation], baseLength: Int) {
           val emptyObj = JsObject(Seq())
 
           (thisOp, thatOp) match {
-            case (retainL: Retain, retainR: Retain) => operations = operations :+ Retain(length, mergeAttributes(retainL.attributes, retainR.attributes)) // need to compose attributes here
+            case (retainL: Retain, retainR: Retain) => operations = operations :+ Retain(length, Attribute.compose(retainL.attributes, retainR.attributes, true)) // need to compose attributes here
             case (retainL: Retain, deleteR: Delete) => operations = operations :+ Delete(length)
-            case (insertL: Insert, retainR: Retain) => operations = operations :+ Insert(insertL.chars, mergeAttributes(insertL.attributes, retainR.attributes, true)) // compose attributes
+            case (insertL: Insert, retainR: Retain) => operations = operations :+ Insert(insertL.chars, Attribute.compose(insertL.attributes, retainR.attributes)) // compose attributes
             case (insertL: Insert, deleteR: Delete) => // Do nothing, they cancel each other out.
             case (_, insertR: Insert) => throw new Exception("Something went horribly wrong. Inserts on the right side should already be taken care of.")
             case (deleteL: Delete, _) => throw new Exception("Something went horribly wrong. Deletes on the left side should already be taken care of.")
@@ -197,7 +197,7 @@ case class Delta(operations: IndexedSeq[Operation], baseLength: Int) {
           case (_, delete: Delete) => xfOps = xfOps :+ delete
 
           case (thisAOp: AttributedOperation, thatAOp: AttributedOperation) =>
-            xfOps = xfOps :+ Retain(length, mergeAttributes(thisAOp.attributes, thatAOp.attributes))
+            xfOps = xfOps :+ Retain(length, Attribute.transform(thisAOp.attributes, thatAOp.attributes, priority))
         }
       }
     }

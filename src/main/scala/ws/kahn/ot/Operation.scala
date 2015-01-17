@@ -10,7 +10,7 @@ sealed trait Operation {
 }
 
 sealed trait AttributedOperation extends Operation {
-  val attributes: Option[JsObject]
+  val attributes: Option[Map[String, Attribute]]
 }
 
 object Operation {
@@ -45,20 +45,9 @@ object Operation {
  * The "retain" operation moves the cursor along the document by
  * a number of characters, effectively "skipping" over them.
  *
- * NB: comparison methods do not work exactly as one might expect.
- *     The equals (==) operator only compares the number of affected
- *     characters! Retain(5) == Insert("kitty") is true!
- *
- *     To test whether two operations are truly "equal" (and have the same type)
- *     use the triple-equals operator (===). Retain(5) === Insert("kitty") is false
- *     but Insert("kitty") === Insert("kitty") is true!
- *
- *     The remaining comparison operators (>, >=, <, <=) also compare against
- *     the num or chars.length values.
- *
  * @param num the number of characters to skip or retain.
  */
-case class Retain(num: Int, attributes: Option[JsObject] = None) extends AttributedOperation {
+case class Retain(num: Int, attributes: Option[Map[String, Attribute]] = None) extends AttributedOperation {
   override val opType: Char = 'r'
 
   override def toString: String = s"Retain($num, ${attributes.toString()})"
@@ -68,12 +57,12 @@ case class Retain(num: Int, attributes: Option[JsObject] = None) extends Attribu
 object Retain {
   implicit val retainReads = (
     (__ \ "retain").read[Int] and
-      (__ \ "attributes").readNullable[JsObject]
+      (__ \ "attributes").readNullable[Map[String, Attribute]]
     )(Retain.apply _)
 
   implicit val retainWrites = (
       (__ \ "retain").write[Int] and
-        (__ \ "attributes").writeNullable[JsObject]
+        (__ \ "attributes").writeNullable[Map[String, Attribute]]
     )(unlift(Retain.unapply))
 }
 
@@ -83,7 +72,7 @@ object Retain {
  *
  * @param chars the string to insert
  */
-case class Insert(chars: String, attributes: Option[JsObject] = None) extends AttributedOperation {
+case class Insert(chars: String, attributes: Option[Map[String, Attribute]] = None) extends AttributedOperation {
   override val opType: Char = 'i'
 
   override def toString: String = s"""Insert(\"${chars}\", ${attributes.toString()})"""
@@ -94,12 +83,12 @@ case class Insert(chars: String, attributes: Option[JsObject] = None) extends At
 object Insert {
   implicit val insertReads = (
     (__ \ "insert").read[String] and
-      (__ \ "attributes").readNullable[JsObject]
+      (__ \ "attributes").readNullable[Map[String, Attribute]]
     )(Insert.apply _)
 
   implicit val insertWrites = (
     (__ \ "insert").write[String] and
-      (__ \ "attributes").writeNullable[JsObject]
+      (__ \ "attributes").writeNullable[Map[String, Attribute]]
     )(unlift(Insert.unapply))
 }
 
