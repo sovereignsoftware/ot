@@ -29,6 +29,24 @@ class OtSpec extends WordSpec with MockFactory {
         resultDoc should be(expectedDoc)
       }
 
+      "perform basic composition" in {
+        val delta1 = Delta(IndexedSeq(
+          Insert("Hello")
+        ))
+
+        val delta2 = Delta(IndexedSeq(
+          Retain(5), Insert("!")
+        ))
+
+        val expected = Delta(IndexedSeq(
+          Insert("Hello!")
+        ))
+
+        val actual = delta1 o delta2
+
+        actual should be(expected)
+      }
+
       "compose two operations and then apply them to a document" in {
 
         val testDoc = "The cute little bunny."
@@ -237,8 +255,7 @@ class OtSpec extends WordSpec with MockFactory {
           Retain(1, Some(Map("bold" -> BooleanAttribute(true), "color" -> StringAttribute("#123")))),
           Insert("giant "),
           Retain(7, Some(Map("color" -> StringAttribute("#123")))),
-          Insert("cat"),
-          Insert("-like stuff"),
+          Insert("cat-like stuff"),
           Delete(5),
           Retain(1)
         ))

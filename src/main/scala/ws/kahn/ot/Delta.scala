@@ -138,14 +138,14 @@ case class Delta(operations: IndexedSeq[Operation]) {
       // Start a buffer for the newly created operations
       var operations = IndexedSeq[Operation]()
 
-      while (thisItr.hasNext && thatItr.hasNext) {
-        if (thatItr.peekType == Operation.Types.Insert) {
+      while (thisItr.hasNext || thatItr.hasNext) {
+        if (thatItr.hasNext && (thatItr.peekType == Operation.Types.Insert)) {
           operations = operations :+ thatItr.next
         }
-        else if (thisItr.peekType == Operation.Types.Delete) {
+        else if (thisItr.hasNext && (thisItr.peekType == Operation.Types.Delete)) {
           operations = operations :+ thisItr.next
         }
-        else {
+        else if (thisItr.hasNext && thatItr.hasNext) {
           val length = math.min(thisItr.peekLength, thatItr.peekLength)
           val thisOp = thisItr.next(length)
           val thatOp = thatItr.next(length)
@@ -160,6 +160,9 @@ case class Delta(operations: IndexedSeq[Operation]) {
             case (deleteL: Delete, _) => throw new Exception("Something went horribly wrong. Deletes on the left side should already be taken care of.")
           }
         }
+        else {
+          throw CompositionErrorException("Invalid composition: delta mismatch.")
+        }
       }
 
       // Build the composed delta
@@ -167,10 +170,10 @@ case class Delta(operations: IndexedSeq[Operation]) {
 
       // Verify that the target length matches that of the "right" delta.
       if (composedOp.targetLength != that.targetLength) {
-        throw CompositionErrorException(s"Composition error. The target length of the composed delta (${composedOp.targetLength}) did not equal the target length of the right delta (${that.targetLength})!")
+        throw CompositionErrorException(s"Invalid composition: The target length of the composed delta (${composedOp.targetLength}) did not equal the target length of the right delta (${that.targetLength})!")
       }
 
-      composedOp
+      composedOp.optimized
     }
   }
 
@@ -216,7 +219,7 @@ case class Delta(operations: IndexedSeq[Operation]) {
       }
     }
 
-    Delta(xfOps)
+    Delta(xfOps).optimized
   }
 
   /**
@@ -247,6 +250,101 @@ case class Delta(operations: IndexedSeq[Operation]) {
       }
     }
     index
+  }
+
+  /**
+   * Optimize an operation by combining adjacent components of the same type.
+   *
+   * This is a pretty simple/naive function... for now it doesn't re-order the
+   * components to make them more semantically correct.
+   *
+   * @return
+   */
+  private def optimized: Delta = {
+    if (this.operations.length > 1) {
+      var i = 0
+      var j = 1
+      var merged = IndexedSeq.empty[Operation]
+
+      var headA = this.operations(i)
+      var headB = this.operations(j)
+      var shouldContinue = true
+
+      while (shouldContinue) {
+        (headA, headB) match {
+          case (retainA: Retain, retainB: Retain)
+            if retainA.attributes.isEmpty && retainB.attributes.isEmpty ||
+              (retainA.attributes.nonEmpty && retainB.attributes.nonEmpty &&
+               retainA.attributes.equals(retainB.attributes)) => {
+            val newRetain = Retain(retainA.num + retainB.num)
+
+            headA = newRetain
+
+            j += 1
+
+            if (j >= this.operations.length) {
+              shouldContinue = false
+              merged = merged :+ headA
+            }
+            else {
+              headB = this.operations(j)
+            }
+          }
+          case (insertA: Insert, insertB: Insert)
+            if insertA.attributes.isEmpty && insertB.attributes.isEmpty ||
+               (insertA.attributes.nonEmpty && insertB.attributes.nonEmpty &&
+                insertA.attributes.equals(insertB.attributes)) => {
+            val newInsert = Insert(insertA.chars + insertB.chars)
+            headA = newInsert
+            j += 1
+            if (j >= this.operations.length) {
+              shouldContinue = false
+              merged = merged :+ headA
+            }
+            else {
+              headB = this.operations(j)
+            }
+          }
+          case (deleteA: Delete, deleteB: Delete) => {
+            val newDelete = Delete(deleteA.num + deleteB.num)
+            headA = newDelete
+            j += 1
+            if (j >= this.operations.length) {
+              shouldContinue = false
+              merged = merged :+ headA
+            }
+            else {
+              headB = this.operations(j)
+            }
+          }
+          //          case (deleteA: Delete, insertB: Insert) => {
+          //            headA = insertB
+          //            headB = deleteA
+          //          }
+          case (anyA, anyB) => {
+            merged = merged :+ anyA
+            i = j
+            j += 1
+
+            if (i >= this.operations.length ||
+              j >= this.operations.length) {
+              shouldContinue = false
+              merged = merged :+ anyB
+            }
+            else {
+              headA = this.operations(i)
+              headB = this.operations(j)
+            }
+          }
+        }
+      }
+
+      val optimized = Delta(merged)
+      optimized
+    }
+    else {
+      this
+    }
   }
 }
 
