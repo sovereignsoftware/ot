@@ -10,7 +10,7 @@ import org.scalamock.scalatest.MockFactory
 
 class OtSpec extends WordSpec with MockFactory {
 
-  "Operation" should {
+  "Delta" should {
     inSequence {
       "apply an operation and return the new document" in {
         val testDoc = "The quick brown fox."
@@ -23,7 +23,7 @@ class OtSpec extends WordSpec with MockFactory {
           Insert("little "),
           Retain(4)
         )
-        val testOp = Delta(testOpComponents, testDoc.length)
+        val testOp = Delta(testOpComponents)
 
         val resultDoc = testOp.applyTo(testDoc)
         resultDoc should be(expectedDoc)
@@ -59,8 +59,8 @@ class OtSpec extends WordSpec with MockFactory {
         )
 
         // Instantiate the two operations to compose
-        val testOpA = Delta(testOpComponentsA, testDoc.length)
-        val testOpB = Delta(testOpComponentsB, intermediateDoc.length)
+        val testOpA = Delta(testOpComponentsA)
+        val testOpB = Delta(testOpComponentsB)
 
         // Compose the two operations
         val testOp = testOpA o testOpB
@@ -90,8 +90,8 @@ class OtSpec extends WordSpec with MockFactory {
           Retain(4)
         )
 
-        val testOpA = Delta(testOpComponentsA, 16)
-        val testOpB = Delta(testOpComponentsB, 25)
+        val testOpA = Delta(testOpComponentsA)
+        val testOpB = Delta(testOpComponentsB)
 
         val testOp = intercept[IncompatibleDeltasException] {
           testOpA.compose(testOpB)
@@ -109,7 +109,7 @@ class OtSpec extends WordSpec with MockFactory {
           Insert("cat"),
           Delete(1),
           Insert("!!!")
-        ), startingDocument.length)
+        ))
 
         val clientEdits = Delta(IndexedSeq(
           Retain(4),
@@ -118,7 +118,7 @@ class OtSpec extends WordSpec with MockFactory {
           Retain(13),
           Delete(1),
           Insert("???")
-        ), startingDocument.length)
+        ))
 
         val xfClient = serverEdits.transform(clientEdits, priority = true)
         val xfServer = clientEdits.transform(serverEdits)
@@ -148,13 +148,13 @@ class OtSpec extends WordSpec with MockFactory {
 
         // Server has 3 more recent edits since the starting document
         val serverEdits = IndexedSeq(
-          Delta(IndexedSeq(Retain(11), Insert("very "), Retain(37)), 48),
-          Delta(IndexedSeq(Retain(28), Delete(5), Insert("rabbit"), Retain(20)), 53),
-          Delta(IndexedSeq(Retain(44), Delete(9), Insert("quickly"), Retain(1)), 54)
+          Delta(IndexedSeq(Retain(11), Insert("very "), Retain(37))),
+          Delta(IndexedSeq(Retain(28), Delete(5), Insert("rabbit"), Retain(20))),
+          Delta(IndexedSeq(Retain(44), Delete(9), Insert("quickly"), Retain(1)))
         )
 
         // But the client made their edit against the starting document
-        val clientEdit = Delta(IndexedSeq(Retain(33), Delete(4), Insert("hops"), Retain(11)), 48)
+        val clientEdit = Delta(IndexedSeq(Retain(33), Delete(4), Insert("hops"), Retain(11)))
 
         // First test the edits to ensure they work...
         serverEdits(0).applyTo(startingDocument) should be(serverDocInter1)
@@ -241,17 +241,50 @@ class OtSpec extends WordSpec with MockFactory {
           Insert("-like stuff"),
           Delete(5),
           Retain(1)
-        ), testDoc.length)
+        ))
 
         // Instantiate the two operations to compose
-        val testDeltaA = Delta(testOpsA, testDoc.length)
-        val testDeltaB = Delta(testOpsB, intermediateDoc.length)
+        val testDeltaA = Delta(testOpsA)
+        val testDeltaB = Delta(testOpsB)
 
         // Compose the two operations
         val actualComposedDelta = testDeltaA o testDeltaB
 
         actualComposedDelta should be(expectedComposedDelta)
       }
+
+      "Unserialize from a JSON string" in {
+        val jsonStr =
+          Json.parse("""
+            |{
+            |  "ops": [
+            |    {"retain": 10},
+            |    {"insert": "cat", "attributes": { "bold": true }},
+            |    {"retain": 5, "attributes": {"bold": true}},
+            |    {"delete": 2},
+            |    {"retain": 3, "attributes": {"bold": null, "italic": null}}
+            |  ]
+            |}
+          """.stripMargin)
+
+        println(jsonStr)
+
+        val expectedDelta = Delta(IndexedSeq(
+          Retain(10),
+          Insert("cat", Some(Map("bold" -> BooleanAttribute(true)))),
+          Retain(5, Some(Map("bold" -> BooleanAttribute(true)))),
+          Delete(2),
+          Retain(3, Some(Map("bold" -> NullAttribute(), "italic" -> NullAttribute())))
+        ))
+
+        val result = Delta.reads.reads(jsonStr)
+        result should be(JsSuccess(expectedDelta))
+      }
+
+      "Serialize to a JSON string" in {
+
+      }
+
     }
   }
 }

@@ -9,7 +9,14 @@ sealed trait Attribute {
 case class NumberAttribute(value: Double) extends Attribute
 case class StringAttribute(value: String) extends Attribute
 case class BooleanAttribute(value: Boolean) extends Attribute
-class NullAttribute extends Attribute
+class NullAttribute extends Attribute {
+  override def equals(that: Any): Boolean = {
+    that match {
+      case other: NullAttribute => true
+      case _ => false
+    }
+  }
+}
 
 object Attribute {
   type AttributeList = Option[Map[String, Attribute]]

@@ -13,12 +13,26 @@ import scala.annotation.tailrec
  *                   - retain: advance the current position, skipping over characters
  *                   - insert: insert characters at the current position
  *                   - delete: delete characters at the current position
- * @param baseLength the length of the string that this delta operates on
  */
-case class Delta(operations: IndexedSeq[Operation], baseLength: Int) {
+case class Delta(operations: IndexedSeq[Operation]) {
 
   /**
-   * The length of the document after applying this delta.
+   * The length of the starting document this delta operates on. Equal
+   * to the sum of the lengths of its retain and delete operations.
+   */
+  val baseLength = {
+    var sum = 0
+    operations.map({
+      case retain: Retain => retain.length
+      case insert: Insert => 0
+      case delete: Delete => delete.length
+    }).foreach(sum += _)
+    sum
+  }
+  
+  /**
+   * The length of the document after applying this delta. Equal to
+   * the length of its retain and insert operations.
    */
   val targetLength = {
     var sum = 0
@@ -31,11 +45,11 @@ case class Delta(operations: IndexedSeq[Operation], baseLength: Int) {
   }
 
   def :+(operation: Operation): Delta = {
-    Delta(operations :+ operation, baseLength)
+    Delta(operations :+ operation)
   }
 
   def +:(operation: Operation): Delta = {
-    Delta(operation +: operations, baseLength)
+    Delta(operation +: operations)
   }
 
   override def toString: String = {
@@ -149,7 +163,7 @@ case class Delta(operations: IndexedSeq[Operation], baseLength: Int) {
       }
 
       // Build the composed delta
-      val composedOp = Delta(operations, this.baseLength)
+      val composedOp = Delta(operations)
 
       // Verify that the target length matches that of the "right" delta.
       if (composedOp.targetLength != that.targetLength) {
@@ -202,7 +216,7 @@ case class Delta(operations: IndexedSeq[Operation], baseLength: Int) {
       }
     }
 
-    Delta(xfOps, this.targetLength)
+    Delta(xfOps)
   }
 
   /**
@@ -234,51 +248,28 @@ case class Delta(operations: IndexedSeq[Operation], baseLength: Int) {
     }
     index
   }
-
-  /**
-   * Merge two json objects with the option to strip top-level nulls. Generally, because "insert" operations
-   * insert new characters into the text, null attributes have no effect and can be discarded... they are only useful
-   * on "retain" operations when we want to remove an attribute.
-   *
-   * @param left
-   * @param right
-   * @param discardNulls
-   * @return
-   */
-  private def mergeAttributes(left: Option[JsObject], right: Option[JsObject], discardNulls: Boolean = false): Option[JsObject] = {
-    val merged = (left, right) match {
-      case (Some(lAttrs), Some(rAttrs)) => Some(lAttrs.deepMerge(rAttrs))
-      case (Some(lAttrs), None) => Some(lAttrs)
-      case (None, Some(rAttrs)) => Some(rAttrs)
-      case (None, None) => None
-    }
-
-    val filtered = if (!discardNulls) { merged } else {
-      merged match {
-        case Some(jsobj) =>
-          Some(JsObject(jsobj.fields.filterNot({ field => field._2 match {
-            case JsNull => true
-            case _ => false
-          }})))
-        case None => None
-      }
-    }
-
-    filtered
-  }
 }
 
 object Delta {
 
-  implicit val reads: Reads[Delta] = (
-    (__ \ "operations").read[IndexedSeq[Operation]] and
-      (__ \ "baseLength").read[Int]
-    )(Delta.apply _)
+  implicit val reads = new Reads[Delta] {
+    def reads(json: JsValue) = {
+      val opOps = (json \ "ops").as[IndexedSeq[Operation]]
+      println(opOps.toString)
+      Option(opOps) match {
+        case Some(operations) => JsSuccess(Delta(operations))
+        case None => JsError("Invalid or missing operations list.")
+      }
+    }
+  }
 
-  implicit val writes: Writes[Delta] = (
-    (__ \ "operations").write[IndexedSeq[Operation]] and
-      (__ \ "baseLength").write[Int]
-    )(unlift(Delta.unapply))
+  implicit val writes = new Writes[Delta] {
+    def writes(delta: Delta): JsValue = {
+      Json.obj(
+        "ops" -> delta.operations
+      )
+    }
+  }
 
   def compose(first: Delta, second: Delta): Delta = first o second
   def transform(left: Delta, right: Delta): Delta = left x right

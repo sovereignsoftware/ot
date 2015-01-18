@@ -23,10 +23,12 @@ object Operation {
 
   implicit val opReads = new Reads[Operation] {
     def reads(json: JsValue) = {
-      {(json \ "retain").asOpt[Int].map { num => Retain.retainReads.reads(json) } orElse
-        (json \ "insert").asOpt[Int].map { num => Insert.insertReads.reads(json) } orElse
-          (json \ "retain").asOpt[Int].map { num => Delete.deleteReads.reads(json) }} getOrElse
-            JsError("Error reading operation")
+      val op = {
+        (json \ "retain").asOpt[Int].map { num => Retain.retainReads.reads(json) } orElse
+        (json \ "insert").asOpt[String].map { num => Insert.insertReads.reads(json) } orElse
+        (json \ "delete").asOpt[Int].map { num => Delete.deleteReads.reads(json) }
+      }
+      op.getOrElse(JsError("Error reading operation"))
     }
   }
 
