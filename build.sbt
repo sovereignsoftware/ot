@@ -48,12 +48,12 @@ libraryDependencies ++= Seq(
 publishMavenStyle := true
 
 publishTo := {
-  val privateKeyFile = new java.io.File(sys.env("HOME") + "/.ssh/id_rsa")
+  val privateKeyFile = new java.io.File(sys.env("HOME") + "/.ssh/shiftfocus.rsa")
   Some(Resolver.sftp(
-    "Kahn.ws Maven Repository",
-    "repo.kahn.ws",
+    "ShiftFocus Maven Repository",
+    "maven.shiftfocus.ca",
     50022,
-    "/var/www/repo.kahn.ws/maven/" + {
+    "/var/www/maven.shiftfocus.ca/repositories/" + {
       if (isSnapshot.value) "snapshots" else "releases"
     }
   ) as ("maven", privateKeyFile))

@@ -73,7 +73,8 @@ case class OpIterator(ops: IndexedSeq[Operation]) {
 
     val nextOp = ops(idx) match {
       case op: Retain => Retain(lengthToTake, op.attributes)
-      case op: Insert => Insert(op.chars.slice(offset, offset + length), op.attributes)
+      case op: InsertText => InsertText(op.chars.slice(offset, offset + length), op.attributes)
+      case op: InsertCode => op
       case op: Delete => Delete(lengthToTake)
     }
 

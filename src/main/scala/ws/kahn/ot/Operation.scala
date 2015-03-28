@@ -25,8 +25,9 @@ object Operation {
     def reads(json: JsValue) = {
       val op = {
         (json \ "retain").asOpt[Int].map { num => Retain.retainReads.reads(json) } orElse
-        (json \ "insert").asOpt[String].map { num => Insert.insertReads.reads(json) } orElse
-        (json \ "delete").asOpt[Int].map { num => Delete.deleteReads.reads(json) }
+          (json \ "insert").asOpt[String].map { num => InsertText.insertTextReads.reads(json) } orElse
+            (json \ "insert").asOpt[Int].map { num => InsertCode.insertCodeReads.reads(json) } orElse
+              (json \ "delete").asOpt[Int].map { num => Delete.deleteReads.reads(json) }
       }
       op.getOrElse(JsError("Error reading operation"))
     }
@@ -71,28 +72,72 @@ object Retain {
 /**
  * The "insert" operation inserts a given string at the cursor's current
  * position in the string.
- *
- * @param chars the string to insert
  */
-case class Insert(chars: String, attributes: Option[Map[String, Attribute]] = None) extends AttributedOperation {
+
+trait Insert extends AttributedOperation {
+  def length: Int
+
+
+}
+object Insert {
+  implicit val insertReads = new Reads[Insert] {
+    def reads(json: JsValue) = {
+      json \ "insert" match {
+        case JsString(text) => InsertText.insertTextReads.reads(json)
+        case JsNumber(code) => InsertCode.insertCodeReads.reads(json)
+        case _ => JsError("Badly formatted Insert operation.")
+      }
+    }
+  }
+  implicit val insertWrites = new Writes[Insert] {
+    def writes(insert: Insert) = {
+      insert match {
+        case text: InsertText => InsertText.insertTextWrites.writes(text)
+        case code: InsertCode => InsertCode.insertCodeWrites.writes(code)
+      }
+    }
+  }
+}
+
+case class InsertText(chars: String, attributes: Option[Map[String, Attribute]] = None) extends Insert {
   override val opType: Char = 'i'
 
-  override def toString: String = s"""Insert(\"${chars}\", ${attributes.toString()})"""
+  override def toString: String = s"""InsertText(\"${chars}\", ${attributes.toString()})"""
 
   override def length: Int = chars.length
 }
-
-object Insert {
-  implicit val insertReads = (
+object InsertText {
+  implicit val insertTextReads = (
     (__ \ "insert").read[String] and
       (__ \ "attributes").readNullable[Map[String, Attribute]]
-    )(Insert.apply _)
+    )(InsertText.apply _)
 
-  implicit val insertWrites = (
+  implicit val insertTextWrites = (
     (__ \ "insert").write[String] and
       (__ \ "attributes").writeNullable[Map[String, Attribute]]
-    )(unlift(Insert.unapply))
+    )(unlift(InsertText.unapply))
 }
+
+case class InsertCode(code: Int, attributes: Option[Map[String, Attribute]] = None) extends Insert {
+  override val opType: Char = 'i'
+
+  override def toString: String = s"""InsertCode(\"${code}\", ${attributes.toString()})"""
+
+  override def length: Int = 1
+}
+object InsertCode {
+  implicit val insertCodeReads = (
+    (__ \ "insert").read[Int] and
+      (__ \ "attributes").readNullable[Map[String, Attribute]]
+    )(InsertCode.apply _)
+
+  implicit val insertCodeWrites = (
+    (__ \ "insert").write[Int] and
+      (__ \ "attributes").writeNullable[Map[String, Attribute]]
+    )(unlift(InsertCode.unapply))
+}
+
+
 
 /**
  * The "delete" operation deletes a number of characters starting

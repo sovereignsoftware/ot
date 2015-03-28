@@ -1,3 +1,5 @@
 package ws.kahn.ot.exceptions
 
-case class IncompatibleDeltasException(msg: String) extends Exception
+import ws.kahn.ot.Delta
+
+case class IncompatibleDeltasException(leftDelta: Delta, rightDelta: Delta) extends Exception

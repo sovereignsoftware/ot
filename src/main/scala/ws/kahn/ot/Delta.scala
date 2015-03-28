@@ -21,13 +21,11 @@ case class Delta(operations: IndexedSeq[Operation]) {
    * to the sum of the lengths of its retain and delete operations.
    */
   val baseLength = {
-    var sum = 0
     operations.map({
       case retain: Retain => retain.length
       case insert: Insert => 0
       case delete: Delete => delete.length
-    }).foreach(sum += _)
-    sum
+    }).sum
   }
   
   /**
@@ -35,13 +33,11 @@ case class Delta(operations: IndexedSeq[Operation]) {
    * the length of its retain and insert operations.
    */
   val targetLength = {
-    var sum = 0
     operations.map({
       case retain: Retain => retain.num
-      case insert: Insert => insert.chars.length
+      case insert: Insert => insert.length
       case delete: Delete => 0
-    }).foreach(sum += _)
-    sum
+    }).sum
   }
 
   def :+(operation: Operation): Delta = {
@@ -93,9 +89,14 @@ case class Delta(operations: IndexedSeq[Operation]) {
           cursor += retain.num
         }
 
-        case insert: Insert => {
-          newDocument = newDocument.substring(0, cursor) + insert.chars + newDocument.substring(cursor)
-          cursor += insert.chars.length
+        case insertText: InsertText => {
+          newDocument = newDocument.substring(0, cursor) + insertText.chars + newDocument.substring(cursor)
+          cursor += insertText.length
+        }
+
+        case insertCode: InsertCode => {
+          newDocument = newDocument.substring(0, cursor) + "\n" + newDocument.substring(cursor)
+          cursor += insertCode.length
         }
 
         case delete: Delete => {
@@ -120,7 +121,7 @@ case class Delta(operations: IndexedSeq[Operation]) {
    */
   def compose(that: Delta): Delta = {
     if (this.targetLength != that.baseLength) {
-      throw IncompatibleDeltasException(s"The target length of the left delta (${this.targetLength}) must be equal to the base length of the right delta (${that.baseLength}). These deltas cannot be composed.")
+      throw IncompatibleDeltasException(this, that)
     }
 
     // Handle some simple base cases
@@ -154,7 +155,8 @@ case class Delta(operations: IndexedSeq[Operation]) {
           (thisOp, thatOp) match {
             case (retainL: Retain, retainR: Retain) => operations = operations :+ Retain(length, Attribute.compose(retainL.attributes, retainR.attributes, true)) // need to compose attributes here
             case (retainL: Retain, deleteR: Delete) => operations = operations :+ Delete(length)
-            case (insertL: Insert, retainR: Retain) => operations = operations :+ Insert(insertL.chars, Attribute.compose(insertL.attributes, retainR.attributes)) // compose attributes
+            case (insertL: InsertText, retainR: Retain) => operations = operations :+ InsertText(insertL.chars, Attribute.compose(insertL.attributes, retainR.attributes)) // compose attributes
+            case (insertL: InsertCode, retainR: Retain) => operations = operations :+ InsertCode(insertL.code, Attribute.compose(insertL.attributes, retainR.attributes)) // compose attributes
             case (insertL: Insert, deleteR: Delete) => // Do nothing, they cancel each other out.
             case (_, insertR: Insert) => throw new Exception("Something went horribly wrong. Inserts on the right side should already be taken care of.")
             case (deleteL: Delete, _) => throw new Exception("Something went horribly wrong. Deletes on the left side should already be taken care of.")
@@ -290,11 +292,11 @@ case class Delta(operations: IndexedSeq[Operation]) {
               headB = this.operations(j)
             }
           }
-          case (insertA: Insert, insertB: Insert)
+          case (insertA: InsertText, insertB: InsertText)
             if insertA.attributes.isEmpty && insertB.attributes.isEmpty ||
                (insertA.attributes.nonEmpty && insertB.attributes.nonEmpty &&
                 insertA.attributes.equals(insertB.attributes)) => {
-            val newInsert = Insert(insertA.chars + insertB.chars)
+            val newInsert = InsertText(insertA.chars + insertB.chars)
             headA = newInsert
             j += 1
             if (j >= this.operations.length) {
@@ -353,7 +355,6 @@ object Delta {
   implicit val reads = new Reads[Delta] {
     def reads(json: JsValue) = {
       val opOps = (json \ "ops").as[IndexedSeq[Operation]]
-      println(opOps.toString)
       Option(opOps) match {
         case Some(operations) => JsSuccess(Delta(operations))
         case None => JsError("Invalid or missing operations list.")
