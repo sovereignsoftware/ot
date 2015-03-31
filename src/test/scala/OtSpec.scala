@@ -17,10 +17,10 @@ class OtSpec extends WordSpec with MockFactory {
         val expectedDoc = "The fast brown little fox."
         val testOpComponents = IndexedSeq[Operation](
           Retain(4),
-          Insert("fast"),
+          InsertText("fast"),
           Delete(5),
           Retain(7),
-          Insert("little "),
+          InsertText("little "),
           Retain(4)
         )
         val testOp = Delta(testOpComponents)
@@ -31,15 +31,15 @@ class OtSpec extends WordSpec with MockFactory {
 
       "perform basic composition" in {
         val delta1 = Delta(IndexedSeq(
-          Insert("Hello")
+          InsertText("Hello")
         ))
 
         val delta2 = Delta(IndexedSeq(
-          Retain(5), Insert("!")
+          Retain(5), InsertCode(0), InsertText("!")
         ))
 
         val expected = Delta(IndexedSeq(
-          Insert("Hello!")
+          InsertText("Hello"), InsertCode(0), InsertText("!")
         ))
 
         val actual = delta1 o delta2
@@ -51,16 +51,17 @@ class OtSpec extends WordSpec with MockFactory {
 
         val testDoc = "The cute little bunny."
 
-        val intermediateDoc = "The caticious little cat."
+        val intermediateDoc = "The caticious little \ncat."
 
-        val expectedDoc = "The precious giant little cat-like stuff."
+        val expectedDoc = "The precious giant little \ncat-like stuff."
 
         val testOpComponentsA = IndexedSeq[Operation](
           Retain(5),
-          Insert("aticious"),
+          InsertText("aticious"),
           Delete(3),
           Retain(8),
-          Insert("cat"),
+          InsertCode(0),
+          InsertText("cat"),
           Delete(5),
           Retain(1)
         )
@@ -68,11 +69,11 @@ class OtSpec extends WordSpec with MockFactory {
         val testOpComponentsB = IndexedSeq[Operation](
           Retain(4),
           Delete(6),
-          Insert("preci"),
+          InsertText("preci"),
           Retain(4),
-          Insert("giant "),
-          Retain(10),
-          Insert("-like stuff"),
+          InsertText("giant "),
+          Retain(11),
+          InsertText("-like stuff"),
           Retain(1)
         )
 
@@ -96,7 +97,7 @@ class OtSpec extends WordSpec with MockFactory {
       "throw an exception if composing two incompatible operations" in {
         val testOpComponentsA = IndexedSeq[Operation](
           Retain(5),
-          Insert("aticious"),
+          InsertText("aticious"),
           Delete(3),
           Retain(8)
         )
@@ -104,7 +105,7 @@ class OtSpec extends WordSpec with MockFactory {
         val testOpComponentsB = IndexedSeq[Operation](
           Retain(4),
           Delete(6),
-          Insert("preci"),
+          InsertText("preci"),
           Retain(4)
         )
 
@@ -121,21 +122,22 @@ class OtSpec extends WordSpec with MockFactory {
         val serverEdits = Delta(IndexedSeq(
           Retain(4),
           Delete(4),
-          Insert("adorable"),
+          InsertText("adorable"),
+          InsertCode(0),
           Retain(8),
           Delete(5),
-          Insert("cat"),
+          InsertText("cat"),
           Delete(1),
-          Insert("!!!")
+          InsertText("!!!")
         ))
 
         val clientEdits = Delta(IndexedSeq(
           Retain(4),
-          Insert("fluffy"),
+          InsertText("fluffy"),
           Delete(4),
           Retain(13),
           Delete(1),
-          Insert("???")
+          InsertText("???")
         ))
 
         val xfClient = serverEdits.transform(clientEdits, priority = true)
@@ -149,8 +151,8 @@ class OtSpec extends WordSpec with MockFactory {
         //println(s"""Server text: $serverText""")
         //println(s"""Client text: $clientText""")
 
-        serverText should be("The fluffyadorable little cat!!!???")
-        clientText should be("The fluffyadorable little cat!!!???")
+        serverText should be("The fluffyadorable\n little cat!!!???")
+        clientText should be("The fluffyadorable\n little cat!!!???")
       }
 
       "compose operations and then transform against them" in {
@@ -166,13 +168,13 @@ class OtSpec extends WordSpec with MockFactory {
 
         // Server has 3 more recent edits since the starting document
         val serverEdits = IndexedSeq(
-          Delta(IndexedSeq(Retain(11), Insert("very "), Retain(37))),
-          Delta(IndexedSeq(Retain(28), Delete(5), Insert("rabbit"), Retain(20))),
-          Delta(IndexedSeq(Retain(44), Delete(9), Insert("quickly"), Retain(1)))
+          Delta(IndexedSeq(Retain(11), InsertText("very "), Retain(37))),
+          Delta(IndexedSeq(Retain(28), Delete(5), InsertText("rabbit"), Retain(20))),
+          Delta(IndexedSeq(Retain(44), Delete(9), InsertText("quickly"), Retain(1)))
         )
 
         // But the client made their edit against the starting document
-        val clientEdit = Delta(IndexedSeq(Retain(33), Delete(4), Insert("hops"), Retain(11)))
+        val clientEdit = Delta(IndexedSeq(Retain(33), Delete(4), InsertText("hops"), Retain(11)))
 
         // First test the edits to ensure they work...
         serverEdits(0).applyTo(startingDocument) should be(serverDocInter1)
@@ -227,10 +229,10 @@ class OtSpec extends WordSpec with MockFactory {
 
         val testOpsA = IndexedSeq[Operation](
           Retain(5),
-          Insert("aticious", Some(Map("bold" -> BooleanAttribute(true)))),
+          InsertText("aticious", Some(Map("bold" -> BooleanAttribute(true)))),
           Delete(3),
           Retain(8, Some(Map("color" -> StringAttribute("#123")))),
-          Insert("cat"),
+          InsertText("cat"),
           Delete(5),
           Retain(1)
         )
@@ -238,24 +240,24 @@ class OtSpec extends WordSpec with MockFactory {
         val testOpsB = IndexedSeq[Operation](
           Retain(4),
           Delete(6),
-          Insert("preci"),
+          InsertText("preci"),
           Retain(4, Some(Map("bold" -> BooleanAttribute(true)))),
-          Insert("giant "),
+          InsertText("giant "),
           Retain(10),
-          Insert("-like stuff"),
+          InsertText("-like stuff"),
           Retain(1)
         )
 
         val expectedComposedDelta = Delta(IndexedSeq[Operation](
           Retain(4),
           Delete(1),
-          Insert("preci"),
-          Insert("ous", Some(Map("bold" -> BooleanAttribute(true)))),
+          InsertText("preci"),
+          InsertText("ous", Some(Map("bold" -> BooleanAttribute(true)))),
           Delete(3),
           Retain(1, Some(Map("bold" -> BooleanAttribute(true), "color" -> StringAttribute("#123")))),
-          Insert("giant "),
+          InsertText("giant "),
           Retain(7, Some(Map("color" -> StringAttribute("#123")))),
-          Insert("cat-like stuff"),
+          InsertText("cat-like stuff"),
           Delete(5),
           Retain(1)
         ))
@@ -288,7 +290,7 @@ class OtSpec extends WordSpec with MockFactory {
 
         val expectedDelta = Delta(IndexedSeq(
           Retain(10),
-          Insert("cat", Some(Map("bold" -> BooleanAttribute(true)))),
+          InsertText("cat", Some(Map("bold" -> BooleanAttribute(true)))),
           Retain(5, Some(Map("bold" -> BooleanAttribute(true)))),
           Delete(2),
           Retain(3, Some(Map("bold" -> NullAttribute(), "italic" -> NullAttribute())))

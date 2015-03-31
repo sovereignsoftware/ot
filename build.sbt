@@ -50,7 +50,7 @@ publishMavenStyle := true
 publishTo := {
   val privateKeyFile = new java.io.File(sys.env("HOME") + "/.ssh/shiftfocus.rsa")
   Some(Resolver.sftp(
-    "ShiftFocus Maven Repository",
+    "ShiftFocus Repository",
     "maven.shiftfocus.ca",
     50022,
     "/var/www/maven.shiftfocus.ca/repositories/" + {
