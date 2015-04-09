@@ -4,8 +4,10 @@ import play.api.libs.json._
 import play.api.libs.functional.syntax._
 
 sealed trait Operation {
-  val opType: Char
-
+  /**
+   * @return the length of the operation: the number of characters
+   * retained, inserted, or deleted.
+   */
   def length: Int
 }
 
@@ -51,10 +53,7 @@ object Operation {
  * @param num the number of characters to skip or retain.
  */
 case class Retain(num: Int, attributes: Option[Map[String, Attribute]] = None) extends AttributedOperation {
-  override val opType: Char = 'r'
-
   override def toString: String = s"Retain($num, ${attributes.toString()})"
-
   override def length: Int = num
 }
 object Retain {
@@ -74,10 +73,8 @@ object Retain {
  * position in the string.
  */
 
-trait Insert extends AttributedOperation {
+sealed trait Insert extends AttributedOperation {
   def length: Int
-
-
 }
 object Insert {
   implicit val insertReads = new Reads[Insert] {
@@ -100,10 +97,7 @@ object Insert {
 }
 
 case class InsertText(chars: String, attributes: Option[Map[String, Attribute]] = None) extends Insert {
-  override val opType: Char = 'i'
-
   override def toString: String = s"""InsertText(\"${chars}\", ${attributes.toString()})"""
-
   override def length: Int = chars.length
 }
 object InsertText {
@@ -119,10 +113,7 @@ object InsertText {
 }
 
 case class InsertCode(code: Int, attributes: Option[Map[String, Attribute]] = None) extends Insert {
-  override val opType: Char = 'i'
-
   override def toString: String = s"""InsertCode(\"${code}\", ${attributes.toString()})"""
-
   override def length: Int = 1
 }
 object InsertCode {
@@ -146,10 +137,7 @@ object InsertCode {
  * @param num the number of characters to delete.
  */
 case class Delete(num: Int) extends Operation {
-  override val opType: Char = 'd'
-
   override def toString: String = s"Delete($num)"
-
   override def length: Int = num
 }
 
