@@ -6,9 +6,10 @@ import ws.kahn.ot.exceptions.IncompatibleDeltasException
 import scala.annotation.tailrec
 
 /**
- * What we call an delta is essentially a list of deltas on a text.
+ * A delta represents a change performed on a document as a sequence of operations
+ * that move a cursor over the document.
  *
- * @param operations the list of deltas in order. Deltas can be any
+ * @param operations the list of operations in order. An operation can be any
  *                   one of:
  *                   - retain: advance the current position, skipping over characters
  *                   - insert: insert characters at the current position
@@ -57,67 +58,28 @@ case class Delta(operations: IndexedSeq[Operation]) {
   }
 
   /**
-   * Composes two deltas together into one single delta.
+   * Composes two deltas together, that should be applied
+   * to a document in sequence, into one delta.
    *
-   * @param that
-   * @return
+   * @param that the second delta to be composed after this one
+   * @return the composed delta
    */
   def o(that: Delta): Delta = this.compose(that)
 
   /**
-   * An alias for the transform method.
+   * Transform two deltas applied to a document simultaneously.
    *
    * @param that
    * @return
    */
-  def x(that: Delta): Delta = this.transform(that)
+  def x(that: Delta, priority: Boolean = false): Delta = this.transform(that, priority)
 
   /**
-   * Apply the delta to a document.
+   * Composes two deltas together, that should be applied
+   * to a document in sequence, into one delta.
    *
-   * @param document
-   * @return
-   */
-  def applyTo(document: String): String = {
-    var cursor = 0
-    var newDocument = document
-
-    // Iterate over the operations of this delta and apply them to the document
-    for (operation <- this.operations) {
-      operation match {
-        case retain: Retain => {
-          cursor += retain.num
-        }
-
-        case insertText: InsertText => {
-          newDocument = newDocument.substring(0, cursor) + insertText.chars + newDocument.substring(cursor)
-          cursor += insertText.length
-        }
-
-        case insertCode: InsertCode => {
-          newDocument = newDocument.substring(0, cursor) + "\n" + newDocument.substring(cursor)
-          cursor += insertCode.length
-        }
-
-        case delete: Delete => {
-          newDocument = newDocument.substring(0, cursor) + newDocument.substring(cursor + delete.num.toInt)
-        }
-      }
-      //println(s"Delta 1. Cursor=$cursor. Document=$newDocument")
-    }
-
-    if (cursor != newDocument.length) {
-      println("Was there an error? Cursor isn't pointing to the end of the document.")
-    }
-
-    newDocument
-  }
-
-  /**
-   * Composes two deltas together into one single delta.
-   *
-   * @param that
-   * @return
+   * @param that the second delta to be composed after this one
+   * @return the composed delta
    */
   def compose(that: Delta): Delta = {
     if (this.targetLength != that.baseLength) {
@@ -186,9 +148,9 @@ case class Delta(operations: IndexedSeq[Operation]) {
    * to true, in which case that delta wins.
    *
    * @param that the other operation to transform this one against
-   * @param priority whether this operation takes priority. By default this operation is being
+   * @param priority whether this delta wins contests. By default this operation is being
    *                 applied _second_.
-   * @return
+   * @return the "that" delta, transformed
    */
   def transform(that: Delta, priority: Boolean = false): Delta = {
     val thisItr = OpIterator(this.operations)
@@ -225,7 +187,7 @@ case class Delta(operations: IndexedSeq[Operation]) {
   }
 
   /**
-   * Transform a position (ie: cursor position within a document) against this
+   * Transform a position (ie: cursor index within a document) against this
    * delta. For example, if a user submits their current cursor position, and other
    * deltas have been applied more recently, their cursor position can be transformed.
    */
@@ -257,10 +219,10 @@ case class Delta(operations: IndexedSeq[Operation]) {
   /**
    * Optimize an operation by combining adjacent components of the same type.
    *
-   * This is a pretty simple/naive function... for now it doesn't re-order the
-   * components to make them more semantically correct.
+   * This is a pretty simple/naive function... for now it doesn't do anything
+   * clever like re-ordering the components to make them more semantically correct.
    *
-   * @return
+   * @return the optimized delta
    */
   private def optimized: Delta = {
     if (this.operations.length > 1) {
@@ -319,10 +281,6 @@ case class Delta(operations: IndexedSeq[Operation]) {
               headB = this.operations(j)
             }
           }
-          //          case (deleteA: Delete, insertB: Insert) => {
-          //            headA = insertB
-          //            headB = deleteA
-          //          }
           case (anyA, anyB) => {
             merged = merged :+ anyA
             i = j

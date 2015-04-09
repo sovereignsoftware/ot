@@ -12,50 +12,12 @@ class OtSpec extends WordSpec with MockFactory {
 
   "Delta" should {
     inSequence {
-      "apply an operation and return the new document" in {
-        val testDoc = "The quick brown fox."
-        val expectedDoc = "The fast brown little fox."
-        val testOpComponents = IndexedSeq[Operation](
-          Retain(4),
-          InsertText("fast"),
-          Delete(5),
-          Retain(7),
-          InsertText("little "),
-          Retain(4)
-        )
-        val testOp = Delta(testOpComponents)
-
-        val resultDoc = testOp.applyTo(testDoc)
-        resultDoc should be(expectedDoc)
-      }
-
-      "perform basic composition" in {
-        val delta1 = Delta(IndexedSeq(
-          InsertText("Hello")
-        ))
-
-        val delta2 = Delta(IndexedSeq(
-          Retain(5), InsertCode(0), InsertText("!")
-        ))
-
-        val expected = Delta(IndexedSeq(
-          InsertText("Hello"), InsertCode(0), InsertText("!")
-        ))
-
-        val actual = delta1 o delta2
-
-        actual should be(expected)
-      }
-
       "compose two operations and then apply them to a document" in {
 
-        val testDoc = "The cute little bunny."
+        val testDoc = Delta(IndexedSeq(InsertText("The cute little bunny.")))
+        val expectedDelta = Delta(IndexedSeq(InsertText("The precious giant little "), InsertCode(0), InsertText("cat-like stuff.")))
 
-        val intermediateDoc = "The caticious little \ncat."
-
-        val expectedDoc = "The precious giant little \ncat-like stuff."
-
-        val testOpComponentsA = IndexedSeq[Operation](
+        val testDeltaA = Delta(IndexedSeq[Operation](
           Retain(5),
           InsertText("aticious"),
           Delete(3),
@@ -64,9 +26,9 @@ class OtSpec extends WordSpec with MockFactory {
           InsertText("cat"),
           Delete(5),
           Retain(1)
-        )
+        ))
 
-        val testOpComponentsB = IndexedSeq[Operation](
+        val testDeltaB = Delta(IndexedSeq[Operation](
           Retain(4),
           Delete(6),
           InsertText("preci"),
@@ -75,23 +37,17 @@ class OtSpec extends WordSpec with MockFactory {
           Retain(11),
           InsertText("-like stuff"),
           Retain(1)
-        )
-
-        // Instantiate the two operations to compose
-        val testOpA = Delta(testOpComponentsA)
-        val testOpB = Delta(testOpComponentsB)
+        ))
 
         // Compose the two operations
-        val testOp = testOpA o testOpB
-
-        // Apply the operation against the test document
-        val resultDoc = testOp.applyTo(testDoc)
+        val composedDelta = testDeltaA.compose(testDeltaB)
+        val resultDelta = testDoc.compose(composedDelta)
 
 //        println(s"\nInput document: $testDoc")
 //        println(s"\nPerforming operation: ${testOp.toString}")
 //        println(s"\nResult document: $resultDoc\n")
 
-        resultDoc should be(expectedDoc)
+        resultDelta should be(expectedDelta)
       }
 
       "throw an exception if composing two incompatible operations" in {
@@ -118,7 +74,9 @@ class OtSpec extends WordSpec with MockFactory {
       }
 
       "transform two operations and successfully apply them" in {
-        val startingDocument = "The cute little bunny."
+        val startingDelta = Delta(IndexedSeq(InsertText("The cute little bunny.")))
+        val expectedDelta = Delta(IndexedSeq(InsertText("The fluffyadorable"), InsertCode(0), InsertText(" little cat!!!???")))
+
         val serverEdits = Delta(IndexedSeq(
           Retain(4),
           Delete(4),
@@ -144,27 +102,19 @@ class OtSpec extends WordSpec with MockFactory {
         val xfServer = clientEdits.transform(serverEdits)
 
         // Now apply the edits to the document and verify that they work!
-        val serverText = xfClient.applyTo(serverEdits.applyTo(startingDocument))
-        val clientText = xfServer.applyTo(clientEdits.applyTo(startingDocument))
+        val serverDelta = startingDelta.compose(serverEdits).compose(xfClient)
+        val clientDelta = startingDelta.compose(clientEdits).compose(xfServer)
 
-        //println(s"""Starting text: $startingDocument""")
-        //println(s"""Server text: $serverText""")
-        //println(s"""Client text: $clientText""")
-
-        serverText should be("The fluffyadorable\n little cat!!!???")
-        clientText should be("The fluffyadorable\n little cat!!!???")
+        serverDelta should be(expectedDelta)
+        clientDelta should be(expectedDelta)
       }
 
       "compose operations and then transform against them" in {
-        val startingDocument = "There is a cute little bunny. He runs very fast."
+        val startingDocument = Delta(IndexedSeq(InsertText("There is a cute little bunny. He runs very fast.")))
+        val finalServerDocument = Delta(IndexedSeq(InsertText("There is a very cute little rabbit. He runs quickly.")))
 
-        val serverDocInter1 = "There is a very cute little bunny. He runs very fast."
-        val serverDocInter2 = "There is a very cute little rabbit. He runs very fast."
-
-        val finalServerDocument = "There is a very cute little rabbit. He runs quickly."
-
-        val finalClientDocument = "There is a cute little bunny. He hops very fast."
-        val finalMergedDocument = "There is a very cute little rabbit. He hops quickly."
+        val finalClientDocument = Delta(IndexedSeq(InsertText("There is a cute little bunny. He hops very fast.")))
+        val finalMergedDocument = Delta(IndexedSeq(InsertText("There is a very cute little rabbit. He hops quickly.")))
 
         // Server has 3 more recent edits since the starting document
         val serverEdits = IndexedSeq(
@@ -175,11 +125,6 @@ class OtSpec extends WordSpec with MockFactory {
 
         // But the client made their edit against the starting document
         val clientEdit = Delta(IndexedSeq(Retain(33), Delete(4), InsertText("hops"), Retain(11)))
-
-        // First test the edits to ensure they work...
-        serverEdits(0).applyTo(startingDocument) should be(serverDocInter1)
-        serverEdits(1).applyTo(serverDocInter1) should be(serverDocInter2)
-        serverEdits(2).applyTo(serverDocInter2) should be(finalServerDocument)
 
         val timeA = System.nanoTime / 1000
 
@@ -197,20 +142,14 @@ class OtSpec extends WordSpec with MockFactory {
         val timeAfterTransform = System.nanoTime / 1000
 
         // And then apply the transformed client edit against the final server text
-        val afterServerEdits = composedServerEdit.applyTo(startingDocument)
-        val afterClientEdit = clientEdit.applyTo(startingDocument)
-        val afterBothEditsClient = xfClientOp.applyTo(afterServerEdits)
+        val afterServerEdits = startingDocument.compose(composedServerEdit)
+        val afterClientEdit = startingDocument.compose(clientEdit)
+        val afterBothEditsClient = afterServerEdits.compose(xfClientOp)
 
         // And we should also be able to apply the transformed server edits against the client's final text
-        val afterBothEditsServer = xfServerOp.applyTo(afterClientEdit)
+        val afterBothEditsServer = afterClientEdit.compose(xfServerOp)
 
         val timeAfterApplications = System.nanoTime / 1000
-
-        println(s"Time spent...")
-        println(s"\tComposing: ${(timeAfterCompose-timeA)}")
-        println(s"\tTransforming: ${timeAfterTransform-timeAfterCompose}")
-        println(s"\tApplying: ${timeAfterApplications-timeAfterTransform}")
-        println(s"\tTotal: ${timeAfterApplications-timeA}")
 
         // Assertions
         afterServerEdits should be(finalServerDocument)
@@ -286,8 +225,6 @@ class OtSpec extends WordSpec with MockFactory {
             |}
           """.stripMargin)
 
-        println(jsonStr)
-
         val expectedDelta = Delta(IndexedSeq(
           Retain(10),
           InsertText("cat", Some(Map("bold" -> BooleanAttribute(true)))),
@@ -303,7 +240,6 @@ class OtSpec extends WordSpec with MockFactory {
       "Serialize to a JSON string" in {
 
       }
-
     }
   }
 }
