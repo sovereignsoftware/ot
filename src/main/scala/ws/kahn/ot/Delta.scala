@@ -41,14 +41,38 @@ case class Delta(operations: IndexedSeq[Operation]) {
     }).sum
   }
 
+  /**
+   * Is the delta a "document"? If a delta contains only inserts, then it can be said
+   * that it represents the state of a document itself.
+   */
+  val isDocument: Boolean = operations.filter({
+    case op: Retain => true
+    case op: Delete => true
+    case op: Insert => false
+  }).isEmpty
+
+  /**
+   * Append an operation ot this delta.
+   *
+   * @param operation
+   * @return the delta with the operation appended
+   */
   def :+(operation: Operation): Delta = {
     Delta(operations :+ operation)
   }
 
+  /**
+   * Prepend an operation to this delta.
+   * @param operation
+   * @return the delta with the operation prepended
+   */
   def +:(operation: Operation): Delta = {
     Delta(operation +: operations)
   }
 
+  /**
+   * @return a string representation of the delta. For debugging purposes only.
+   */
   override def toString: String = {
     s"""
        |Delta(
@@ -112,13 +136,12 @@ case class Delta(operations: IndexedSeq[Operation]) {
           val length = math.min(thisItr.peekLength, thatItr.peekLength)
           val thisOp = thisItr.next(length)
           val thatOp = thatItr.next(length)
-          val emptyObj = JsObject(Seq())
 
           (thisOp, thatOp) match {
-            case (retainL: Retain, retainR: Retain) => operations = operations :+ Retain(length, Attribute.compose(retainL.attributes, retainR.attributes, true)) // need to compose attributes here
+            case (retainL: Retain, retainR: Retain) => operations = operations :+ Retain(length, Attribute.compose(retainL.attributes, retainR.attributes, true))
             case (retainL: Retain, deleteR: Delete) => operations = operations :+ Delete(length)
-            case (insertL: InsertText, retainR: Retain) => operations = operations :+ InsertText(insertL.chars, Attribute.compose(insertL.attributes, retainR.attributes)) // compose attributes
-            case (insertL: InsertCode, retainR: Retain) => operations = operations :+ InsertCode(insertL.code, Attribute.compose(insertL.attributes, retainR.attributes)) // compose attributes
+            case (insertL: InsertText, retainR: Retain) => operations = operations :+ InsertText(insertL.chars, Attribute.compose(insertL.attributes, retainR.attributes))
+            case (insertL: InsertCode, retainR: Retain) => operations = operations :+ InsertCode(insertL.code, Attribute.compose(insertL.attributes, retainR.attributes))
             case (insertL: Insert, deleteR: Delete) => // Do nothing, they cancel each other out.
             case (_, insertR: Insert) => throw new Exception("Something went horribly wrong. Inserts on the right side should already be taken care of.")
             case (deleteL: Delete, _) => throw new Exception("Something went horribly wrong. Deletes on the left side should already be taken care of.")
@@ -137,6 +160,7 @@ case class Delta(operations: IndexedSeq[Operation]) {
         throw CompositionErrorException(s"Invalid composition: The target length of the composed delta (${composedOp.targetLength}) did not equal the target length of the right delta (${that.targetLength})!")
       }
 
+      // Merge adjacent operations with the same type and attributes
       composedOp.optimized
     }
   }
@@ -183,6 +207,7 @@ case class Delta(operations: IndexedSeq[Operation]) {
       }
     }
 
+    // Merge adjacent operations with the same type and attributes
     Delta(xfOps).optimized
   }
 
