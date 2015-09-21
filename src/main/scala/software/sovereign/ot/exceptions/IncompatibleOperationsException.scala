@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 //   limitations under the License.
 
-package ws.kahn.ot.exceptions
+package software.sovereign.ot.exceptions
 
-import ws.kahn.ot.Delta
+import software.sovereign.ot.Delta
 
 case class IncompatibleDeltasException(leftDelta: Delta, rightDelta: Delta) extends Exception

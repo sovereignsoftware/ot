@@ -2,8 +2,9 @@ import org.scalatest.Matchers._
 import org.scalatest._
 import org.scalamock.scalatest.MockFactory
 import play.api.libs.json._
+import software.sovereign.ot._
+import software.sovereign.ot.exceptions.IncompatibleDeltasException
 import ws.kahn.ot._
-import ws.kahn.ot.exceptions.{IncompatibleDeltasException}
 
 // Is used for "should be and etc."
 import org.scalamock.scalatest.MockFactory
